@@ -48,10 +48,12 @@ public class PoolHandShakeHandler extends SimpleChannelInboundHandler<Object> {
      * */
     private void handleHttpRequest(ChannelHandlerContext ctx, FullHttpRequest req) {
         String clientIP = ctx.channel().remoteAddress().toString();
+        boolean isIPAllowed = ClientIP.contains("0.0.0.0"); //判断矿池白名单，0.0.0.0全通，否则判断具体ip
+        if (!isIPAllowed){
+            isIPAllowed = clientIP.contains(ClientIP);
+        }
         //Upgrade to websocket, allow pool client ip in config ,filter 'get/Post'
-        if ((!clientIP.contains(ClientIP))
-                || !req.decoderResult().isSuccess()
-                || (!"websocket".equals(req.headers().get("Upgrade")))) {
+        if (!isIPAllowed || !req.decoderResult().isSuccess() || (!"websocket".equals(req.headers().get("Upgrade")))) {
         //if not websocket request ，create BAD_REQUEST return client
             sendHttpResponse(ctx, req, new DefaultFullHttpResponse(
                     HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_REQUEST));
