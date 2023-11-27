@@ -45,7 +45,7 @@ import io.xdag.net.ChannelManager;
 import io.xdag.net.message.MessageQueue;
 import io.xdag.net.NetDB;
 import io.xdag.net.node.NodeManager;
-import io.xdag.net.websocket.WebSocketServer;
+import io.xdag.websocket.WebSocketServer;
 import io.xdag.rpc.Web3;
 import io.xdag.rpc.Web3Impl;
 import io.xdag.rpc.cors.CorsConfiguration;

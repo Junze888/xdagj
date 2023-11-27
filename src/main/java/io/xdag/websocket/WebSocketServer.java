@@ -1,4 +1,4 @@
-package io.xdag.net.websocket;
+package io.xdag.websocket;
 
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;

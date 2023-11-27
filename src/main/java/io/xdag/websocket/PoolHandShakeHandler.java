@@ -1,4 +1,4 @@
-package io.xdag.net.websocket;
+package io.xdag.websocket;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -14,7 +14,6 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.websocketx.*;
 import io.netty.util.CharsetUtil;
 import static io.netty.handler.codec.http.HttpUtil.isKeepAlive;
-import java.util.Date;
 
 import lombok.extern.slf4j.Slf4j;
 
