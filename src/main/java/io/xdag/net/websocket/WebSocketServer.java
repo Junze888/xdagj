@@ -1,6 +1,6 @@
-package io.xdag.websocket;
+package io.xdag.net.websocket;
 
-import io.netty.channel.ChannelFuture;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
@@ -12,7 +12,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LoggingHandler;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
-import javax.annotation.Nullable;
+
 
 @Slf4j
 public class WebSocketServer {
@@ -21,7 +21,7 @@ public class WebSocketServer {
     private final int ServerPort;
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
-    private @Nullable ChannelFuture webSocketChannel;
+    private Channel webSocketChannel;
 
     public WebSocketServer(String clientHost, String tag, int port) {
         this.ClientHost = clientHost;
@@ -46,18 +46,12 @@ public class WebSocketServer {
                         ch.pipeline().addLast("handler", new PoolHandShakeHandler(ClientHost, ClientTag, ServerPort));//pool handler write by ourselves
                     }
                 });//initialize worker Group
-        webSocketChannel  = b.bind("localhost",ServerPort);
-        try {
-            webSocketChannel.sync();
-        } catch (InterruptedException e) {
-            log.error("The Pool WebSocket server couldn't be started", e);
-            Thread.currentThread().interrupt();
-        }
+        webSocketChannel = b.bind("localhost",ServerPort).channel();
     }
 
     public void stop() {
         try {
-            Objects.requireNonNull(webSocketChannel).channel().close().sync();
+            Objects.requireNonNull(webSocketChannel).closeFuture().sync();
         } catch (InterruptedException e) {
             log.error("Couldn't stop the Pool WebSocket server", e);
             Thread.currentThread().interrupt();
