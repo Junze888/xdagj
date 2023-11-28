@@ -1,4 +1,4 @@
-package io.xdag.websocket;
+package io.xdag.net.websocket;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelId;
