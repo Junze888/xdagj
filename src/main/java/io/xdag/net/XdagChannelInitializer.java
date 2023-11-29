@@ -55,11 +55,11 @@ public class XdagChannelInitializer extends ChannelInitializer<SocketChannel> {
             log.debug("New {} channel: remoteAddress = {}:{}", isServer ? "inbound" : "outbound",
                     address.getAddress().getHostAddress(), address.getPort());
 
-            if (isServer && !channelMgr.isAcceptable(address)) {
-                log.debug("Disallowed inbound connection: {}", address);
-                ch.disconnect();
-                return;
-            }
+//            if (isServer && !channelMgr.isAcceptable(address)) {
+//                log.debug("Disallowed inbound connection: {}", address);
+//                ch.disconnect();
+//                return;
+//            }
             Channel channel = new Channel(ch);
             channel.init(ch.pipeline(), isServer, address, kernel);
             channelMgr.add(channel);
