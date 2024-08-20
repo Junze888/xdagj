@@ -29,7 +29,6 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
 import io.xdag.config.Config;
-import io.xdag.net.Channel;
 import io.xdag.net.PeerClient;
 import io.xdag.net.XdagChannelInitializer;
 import io.xdag.net.NetDBManager;
@@ -37,16 +36,12 @@ import io.xdag.net.ChannelManager;
 import io.xdag.net.NetDB;
 import java.net.InetSocketAddress;
 import java.util.Collection;
-import java.util.Deque;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
+
 
 @Slf4j
 public class NodeManager {
@@ -59,7 +54,7 @@ public class NodeManager {
     private static final long MAX_QUEUE_SIZE = 1024;
     private static final int LRU_CACHE_SIZE = 1024;
     private static final long RECONNECT_WAIT = 60L * 1000L;
-    private final Deque<Node> deque = new ConcurrentLinkedDeque<>();
+    private final BlockingQueue<Node> queue = new LinkedBlockingQueue<>();
     /**
      * 记录对应节点节点最后一次连接的时间
      */
@@ -115,7 +110,7 @@ public class NodeManager {
     }
 
     public int queueSize() {
-        return deque.size();
+        return queue.size();
     }
 
     public void addNodes(Collection<Node> nodes) {
@@ -128,13 +123,10 @@ public class NodeManager {
     }
 
     public void addNode(Node node) {
-        if (deque.contains(node)) {
+        if (queue.contains(node)) {
             return;
         }
-        deque.addFirst(node);
-        while (queueSize() > MAX_QUEUE_SIZE) {
-            deque.removeLast();
-        }
+        if (queueSize() < MAX_QUEUE_SIZE) queue.add(node);
     }
 
 
@@ -142,7 +134,7 @@ public class NodeManager {
      * from net update seed nodes
      */
     protected void doFetch() {
-        log.debug("Do fetch node size:{}", deque.size());
+        log.debug("Do fetch node size:{}", queue.size());
         if (config.getNodeSpec().enableRefresh()) {
             netDBManager.refresh();
         }
@@ -161,21 +153,27 @@ public class NodeManager {
     }
 
     public void doConnect() {
-        Set<InetSocketAddress> activeAddress = channelMgr.getActiveAddresses();
-        Node node;
-        while ((node = deque.pollFirst()) != null && channelMgr.size() < config.getNodeSpec().getMaxConnections()) {
-            Long lastCon = lastConnect.getIfPresent(node);
-            long now = System.currentTimeMillis();
-
-            if (!client.getNode().equals(node)
-                    && !node.equals(client.getNode())
-                    && !activeAddress.contains(node.getAddress())
-                    && (lastCon == null || lastCon + RECONNECT_WAIT < now)) {
-                XdagChannelInitializer initializer = new XdagChannelInitializer(kernel, false, node);
-                client.connect(node, initializer);
-                lastConnect.put(node, now);
-                break;
+        try {
+            while (isRunning) {
+                Node node = queue.take();
+                if (channelMgr.size() < config.getNodeSpec().getMaxConnections()){
+                    Long lastCon = lastConnect.getIfPresent(node);
+                    long now = System.currentTimeMillis();
+                    Set<InetSocketAddress> activeAddress = channelMgr.getActiveAddresses();
+                    if (!client.getNode().equals(node)
+                            && !node.equals(client.getNode())
+                            && !activeAddress.contains(node.getAddress())
+                            && (lastCon == null || lastCon + RECONNECT_WAIT < now)) {
+                        XdagChannelInitializer initializer = new XdagChannelInitializer(kernel, false, node);
+                        client.connect(node, initializer);
+                        lastConnect.put(node, now);
+                        break;
+                    }
+                }
             }
+        }catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // Restore interrupt status
+            log.error("client connect was interrupted", e);
         }
 
     }
