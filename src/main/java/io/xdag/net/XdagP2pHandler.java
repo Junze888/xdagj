@@ -104,7 +104,6 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
 
     private final NetDBManager netdbMgr;
     private final MessageQueue msgQueue;
-    private final BlockingQueue<BlocksRequestMessage> requestQueue = new LinkedBlockingQueue<>(4096);
 
     private final AtomicBoolean isHandshakeDone = new AtomicBoolean(false);
 
@@ -387,27 +386,21 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     protected void processBlocksRequest(BlocksRequestMessage msg) throws InterruptedException {
         // 更新全网状态
         updateXdagStats(msg);
-        BlocksRequestMessage curMsg = msg;
+
         Lock lock = MessageQueue.getLock();
         Condition notFull = MessageQueue.getCondition();
+        //wait the send queue await thread.
         lock.lock();
         try {
-              if (msgQueue.size() < THRESHOLD_SEND_QUEUE && !requestQueue.isEmpty()) {
-                  curMsg = requestQueue.take();
-                  requestQueue.put(msg);
-              } else if (msgQueue.size() > THRESHOLD_SEND_QUEUE){
-                  requestQueue.put(msg);
-                  while (msgQueue.size() > THRESHOLD_SEND_QUEUE) {
-                      notFull.await(); // 释放锁等待唤醒
-                  }
-                  curMsg = requestQueue.take();
+              while (msgQueue.size() > THRESHOLD_SEND_QUEUE) {
+                  notFull.await(); // 释放锁等待唤醒
               }
         } finally {
               lock.unlock();
         }
-        long startTime = curMsg.getStarttime();
-        long endTime = curMsg.getEndtime();
-        long random = curMsg.getRandom();
+        long startTime = msg.getStarttime();
+        long endTime = msg.getEndtime();
+        long random = msg.getRandom();
         // TODO: paulochen 处理多区块请求
         //        // 如果大于快照点的话 我可以发送
         //        if (startTime > 1658318225407L) {
