@@ -25,6 +25,7 @@
 package io.xdag.net.message;
 
 import static io.xdag.config.Constants.SEND_PERIOD;
+import static io.xdag.config.Constants.THRESHOLD_SEND_QUEUE;
 
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -32,6 +33,9 @@ import io.xdag.config.Config;
 import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import io.xdag.net.message.p2p.DisconnectMessage;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +55,8 @@ public class MessageQueue {
     private final Queue<Message> prioritized = new ConcurrentLinkedQueue<>();
     private ChannelHandlerContext ctx;
     private ScheduledFuture<?> timerTask;
-
+    private static final Lock lock = new ReentrantLock();
+    private static final Condition notFull = lock.newCondition();
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
     public MessageQueue(Config config) {
@@ -108,7 +113,8 @@ public class MessageQueue {
     public int size() {
         return queue.size() + prioritized.size();
     }
-
+    public static Lock getLock(){return lock;}
+    public static Condition getCondition(){return notFull;}
     private void nudgeQueue() {
         //Increase bandwidth consumption of a full used single sync thread to 3 Mbps.
         int n = Math.min(8, size());
@@ -123,5 +129,9 @@ public class MessageQueue {
             ctx.write(msg).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
         }
         ctx.flush();
+        //尝试唤醒入队等待线程
+        lock.lock();
+        if (size() < THRESHOLD_SEND_QUEUE) notFull.signalAll();
+        lock.unlock();
     }
 }

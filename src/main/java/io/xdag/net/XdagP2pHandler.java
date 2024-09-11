@@ -25,13 +25,11 @@ package io.xdag.net;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
 
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.tuweni.bytes.Bytes;
@@ -75,6 +73,7 @@ import io.xdag.net.node.NodeManager;
 import io.xdag.utils.XdagTime;
 import io.xdag.utils.exception.UnreachableException;
 import lombok.extern.slf4j.Slf4j;
+import static io.xdag.config.Constants.THRESHOLD_SEND_QUEUE;
 
 /**
  * Xdag P2P message handler
@@ -105,6 +104,7 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
 
     private final NetDBManager netdbMgr;
     private final MessageQueue msgQueue;
+    private final BlockingQueue<BlocksRequestMessage> requestQueue = new LinkedBlockingQueue<>(4096);
 
     private final AtomicBoolean isHandshakeDone = new AtomicBoolean(false);
 
@@ -179,7 +179,7 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     }
 
     @Override
-    public void channelRead0(final ChannelHandlerContext ctx, Message msg) {
+    public void channelRead0(final ChannelHandlerContext ctx, Message msg) throws InterruptedException {
         log.trace("Received message: {}", msg);
 
         switch (msg.getCode()) {
@@ -298,7 +298,7 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
         }
     }
 
-    protected void onXdag(Message msg) {
+    protected void onXdag(Message msg) throws InterruptedException {
         if (!isHandshakeDone.get()) {
             return;
         }
@@ -383,13 +383,31 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     /**
      * 区块请求响应一个区块 并开启一个线程不断发送一段时间内的区块 *
      */
-    protected void processBlocksRequest(BlocksRequestMessage msg) {
+
+    protected void processBlocksRequest(BlocksRequestMessage msg) throws InterruptedException {
         // 更新全网状态
         updateXdagStats(msg);
-        long startTime = msg.getStarttime();
-        long endTime = msg.getEndtime();
-        long random = msg.getRandom();
-
+        BlocksRequestMessage curMsg = msg;
+        Lock lock = MessageQueue.getLock();
+        Condition notFull = MessageQueue.getCondition();
+        lock.lock();
+        try {
+              if (msgQueue.size() < THRESHOLD_SEND_QUEUE && !requestQueue.isEmpty()) {
+                  curMsg = requestQueue.take();
+                  requestQueue.put(msg);
+              } else if (msgQueue.size() > THRESHOLD_SEND_QUEUE){
+                  requestQueue.put(msg);
+                  while (msgQueue.size() > THRESHOLD_SEND_QUEUE) {
+                      notFull.await(); // 释放锁等待唤醒
+                  }
+                  curMsg = requestQueue.take();
+              }
+        } finally {
+              lock.unlock();
+        }
+        long startTime = curMsg.getStarttime();
+        long endTime = curMsg.getEndtime();
+        long random = curMsg.getRandom();
         // TODO: paulochen 处理多区块请求
         //        // 如果大于快照点的话 我可以发送
         //        if (startTime > 1658318225407L) {

@@ -66,6 +66,8 @@ public class Constants {
     public static final long REQUEST_BLOCKS_MAX_TIME = UInt64.valueOf(1L << 20).toLong();
     public static final long REQUEST_WAIT = 64;
     public static final long MAX_ALLOWED_EXTRA = 65536;
+    /**发送队列约束门限**/
+    public static final int THRESHOLD_SEND_QUEUE = 4096;
     /**
      * 每一轮的确认数是16
      */
