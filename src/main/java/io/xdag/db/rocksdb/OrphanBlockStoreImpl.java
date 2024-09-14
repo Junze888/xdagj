@@ -68,8 +68,14 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
         } else {
             long orphanSize = getOrphanSize();
             long addNum = Math.min(orphanSize, num);
-            byte[] key = BytesUtils.of(ORPHAN_PREFEX);
+            byte[] key = BytesUtils.of(TX_ORPHAN_PREFIX);
             List<Pair<byte[],byte[]>> ans = orphanSource.prefixKeyAndValueLookup(key);
+
+            //TX not enough get linkBlock
+            if (ans.size() < 11){
+                byte[] linkBlockKey =  BytesUtils.of(LINK_ORPHAN_PREFIX);
+                ans.addAll(orphanSource.prefixKeyAndValueLookup(linkBlockKey));
+            }
             ans.sort(Comparator.comparingLong(a -> BytesUtils.bytesToLong(a.getValue(), 0, true)));
             for (Pair<byte[],byte[]> an : ans) {
                 if (addNum == 0) {
@@ -98,16 +104,25 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
         }
     }
 
-    public void deleteByHash(byte[] hashlow) {
+    public void deleteByHash(byte[] hashlow, boolean isTX) {
         log.debug("deleteByhash");
-        orphanSource.delete(BytesUtils.merge(ORPHAN_PREFEX, hashlow));
+        if (isTX){
+            orphanSource.delete(BytesUtils.merge(TX_ORPHAN_PREFIX, hashlow));
+        }else {
+            orphanSource.delete(BytesUtils.merge(LINK_ORPHAN_PREFIX, hashlow));
+        }
         long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
         orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize - 1, false));
     }
 
-    public void addOrphan(Block block) {
-        orphanSource.put(BytesUtils.merge(ORPHAN_PREFEX, block.getHashLow().toArray()),
-                BytesUtils.longToBytes(block.getTimestamp(), true));
+    public void addOrphan(Block block, boolean isTX) {
+        if (isTX){
+            orphanSource.put(BytesUtils.merge(TX_ORPHAN_PREFIX, block.getHashLow().toArray()),
+                    BytesUtils.longToBytes(block.getTimestamp(), true));
+        }else {
+            orphanSource.put(BytesUtils.merge(LINK_ORPHAN_PREFIX, block.getHashLow().toArray()),
+                    BytesUtils.longToBytes(block.getTimestamp(), true));
+        }
         long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
         log.debug("orphan current size:{}", currentsize);
 //        log.debug(":" + Hex.toHexString(orphanSource.get(ORPHAN_SIZE)));

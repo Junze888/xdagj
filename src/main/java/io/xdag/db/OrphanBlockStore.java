@@ -30,8 +30,10 @@ import java.util.List;
 import org.bouncycastle.util.encoders.Hex;
 
 public interface OrphanBlockStore {
-
-    byte ORPHAN_PREFEX = 0x00;
+    //transaction in orphan pool
+    byte TX_ORPHAN_PREFIX = 0x00;
+    //link block in orphan pool
+    byte LINK_ORPHAN_PREFIX = 0x10;
     /**
      * size key
      */
@@ -43,9 +45,9 @@ public interface OrphanBlockStore {
 
     List<Address> getOrphan(long num, long[] sendTime);
 
-    void deleteByHash(byte[] hashlow);
+    void deleteByHash(byte[] hashlow, boolean isTx);
 
-    void addOrphan(Block block);
+    void addOrphan(Block block, boolean isTx);
 
     long getOrphanSize();
 
