@@ -438,7 +438,7 @@ public class BlockchainImpl implements Blockchain {
                 // 1. prohibited non-mining node set Tx pool,
                 // 2. all nodes temporarily close tx pool when syncing.
                 if (kernel.getConfig().getEnableGenerateBlock() && kernel.getPow() != null) {
-                    orphanBlockStore.addOrphan(block, true);
+                    orphanBlockStore.addOrphan(block, block.getInputs().size() != 0);
                 }
                 xdagStats.nnoref++;
             }
@@ -1302,7 +1302,7 @@ public class BlockchainImpl implements Blockchain {
                 updateBlockFlag(removeBlockRaw, BI_EXTRA, false);
                 xdagStats.nextra--;
             } else {
-                orphanBlockStore.deleteByHash(b.getHashLow().toArray(), true);
+                orphanBlockStore.deleteByHash(b.getHashLow().toArray(), b.getInputs().size() != 0);
                 xdagStats.nnoref--;
             }
             // 更新这个块的flag
